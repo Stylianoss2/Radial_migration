@@ -13,16 +13,6 @@ It models orbital dynamics using Leapfrog integration in both the inertial and r
   - 2D and 3D simulations.
   - Output of full orbital trajectories, accelerations, and derived parameters.
 
-## Directory Structure
-Radial_migration/
-├── 2D/ # 2D simulation output
-├── 3D/ # 3D simulation output
-├── source/ # Core simulation source code
-├── include/ # Header files for potentials, integrators, etc.
-├── build/ # CMake-generated build files
-├── CMakeLists.txt # Build configuration
-└── README.md # Project documentation
-
 ## Requirements
 
 - C++17 or later
