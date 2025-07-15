@@ -1,9 +1,0 @@
-/home/stylianodeon/Radial_migration/2D/build/CMakeFiles/edit_cache.dir
-/home/stylianodeon/Radial_migration/2D/build/CMakeFiles/rebuild_cache.dir
-/home/stylianodeon/Radial_migration/2D/build/Log_pot/CMakeFiles/LogPotExec.dir
-/home/stylianodeon/Radial_migration/2D/build/Log_pot/CMakeFiles/edit_cache.dir
-/home/stylianodeon/Radial_migration/2D/build/Log_pot/CMakeFiles/rebuild_cache.dir
-/home/stylianodeon/Radial_migration/2D/build/VecUtils/CMakeFiles/edit_cache.dir
-/home/stylianodeon/Radial_migration/2D/build/VecUtils/CMakeFiles/rebuild_cache.dir
-/home/stylianodeon/Radial_migration/2D/build/VecUtils/source/CMakeFiles/edit_cache.dir
-/home/stylianodeon/Radial_migration/2D/build/VecUtils/source/CMakeFiles/rebuild_cache.dir
