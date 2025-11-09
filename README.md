@@ -17,8 +17,6 @@ It models orbital dynamics using Leapfrog integration in both the inertial and r
 
 - C++17 or later
 - CMake (>= 3.15)
-- GCC or Clang
-- MPI (optional, if using parallel versions)
 
 ## Building the Project
 cmake -B build
