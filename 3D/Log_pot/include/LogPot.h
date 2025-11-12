@@ -80,7 +80,7 @@ double total_potential_energy(const Vec3 &cart_pos, const double &q, const doubl
     return log_pot_energy + pert_energy;
 }
 
-Vec3 total_acceleration(const Vec3 &cart_pos, const Vec3& cart_vel, const double &q, const double &sim_time)
+Vec3 total_acceleration(const Vec3 &cart_pos, const double &q, const double &sim_time)
 {
     /* 
     Vec3 log_pot_acc; // = LogPot_acc(cart_pos, q);
@@ -115,7 +115,7 @@ double effective_potential(const Vec3 &cart_pos, const double &q, const double &
     return phi_total - centrifugal_force;
 }
 
-Vec3 effective_potential_gradient(const Vec3 &cart_pos, const Vec3& cart_vel, const double &q, const double &sim_time)
+Vec3 effective_potential_gradient(const Vec3 &cart_pos, const double &q, const double &sim_time)
 {
     double delta = 0.000001;
     Vec3 cart_posdx;  Vec3 cart_posdy;  Vec3 cart_posdz;

@@ -1,6 +1,8 @@
 file(REMOVE_RECURSE
   "../bin/LogPotExec"
   "../bin/LogPotExec.pdb"
+  "CMakeFiles/LogPotExec.dir/source/Dehnen_DF.cpp.o"
+  "CMakeFiles/LogPotExec.dir/source/Dehnen_DF.cpp.o.d"
   "CMakeFiles/LogPotExec.dir/source/LogPot.cpp.o"
   "CMakeFiles/LogPotExec.dir/source/LogPot.cpp.o.d"
 )

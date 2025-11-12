@@ -42,7 +42,7 @@ void simulate_trajectory(Vec3 &orbit_pos, Vec3 &orbit_vel, const double &q, cons
         double sim_time = static_cast<double>(i) * dt;
 
         Vec3 log_acc = LogPot_acc(orbit_pos, q);
-        Vec3 total_acc = total_acceleration(orbit_pos, orbit_vel, q, sim_time);
+        Vec3 total_acc = total_acceleration(orbit_pos, q, sim_time);
 
         double Lz = use_pert ? angular_momentum_inertial_frame(orbit_pos, orbit_vel) : angular_momentum(orbit_pos, orbit_vel);
         double KE = use_pert ? kinetic_energy_inertial_frame(orbit_pos, orbit_vel) : kinetic_energy(orbit_vel);

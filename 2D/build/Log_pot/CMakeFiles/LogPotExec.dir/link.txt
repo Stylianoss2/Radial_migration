@@ -1,1 +1,1 @@
-/usr/bin/c++  -O3 CMakeFiles/LogPotExec.dir/source/LogPot.cpp.o -o ../bin/LogPotExec 
+/usr/bin/c++  -O3 CMakeFiles/LogPotExec.dir/source/LogPot.cpp.o CMakeFiles/LogPotExec.dir/source/Dehnen_DF.cpp.o -o ../bin/LogPotExec 

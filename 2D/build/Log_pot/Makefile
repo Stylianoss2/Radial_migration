@@ -130,6 +130,30 @@ LogPotExec/fast:
 	cd /home/stylianodeon/Radial_migration/2D/build && $(MAKE) $(MAKESILENT) -f Log_pot/CMakeFiles/LogPotExec.dir/build.make Log_pot/CMakeFiles/LogPotExec.dir/build
 .PHONY : LogPotExec/fast
 
+source/Dehnen_DF.o: source/Dehnen_DF.cpp.o
+.PHONY : source/Dehnen_DF.o
+
+# target to build an object file
+source/Dehnen_DF.cpp.o:
+	cd /home/stylianodeon/Radial_migration/2D/build && $(MAKE) $(MAKESILENT) -f Log_pot/CMakeFiles/LogPotExec.dir/build.make Log_pot/CMakeFiles/LogPotExec.dir/source/Dehnen_DF.cpp.o
+.PHONY : source/Dehnen_DF.cpp.o
+
+source/Dehnen_DF.i: source/Dehnen_DF.cpp.i
+.PHONY : source/Dehnen_DF.i
+
+# target to preprocess a source file
+source/Dehnen_DF.cpp.i:
+	cd /home/stylianodeon/Radial_migration/2D/build && $(MAKE) $(MAKESILENT) -f Log_pot/CMakeFiles/LogPotExec.dir/build.make Log_pot/CMakeFiles/LogPotExec.dir/source/Dehnen_DF.cpp.i
+.PHONY : source/Dehnen_DF.cpp.i
+
+source/Dehnen_DF.s: source/Dehnen_DF.cpp.s
+.PHONY : source/Dehnen_DF.s
+
+# target to generate assembly for a file
+source/Dehnen_DF.cpp.s:
+	cd /home/stylianodeon/Radial_migration/2D/build && $(MAKE) $(MAKESILENT) -f Log_pot/CMakeFiles/LogPotExec.dir/build.make Log_pot/CMakeFiles/LogPotExec.dir/source/Dehnen_DF.cpp.s
+.PHONY : source/Dehnen_DF.cpp.s
+
 source/LogPot.o: source/LogPot.cpp.o
 .PHONY : source/LogPot.o
 
@@ -163,6 +187,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... LogPotExec"
+	@echo "... source/Dehnen_DF.o"
+	@echo "... source/Dehnen_DF.i"
+	@echo "... source/Dehnen_DF.s"
 	@echo "... source/LogPot.o"
 	@echo "... source/LogPot.i"
 	@echo "... source/LogPot.s"
