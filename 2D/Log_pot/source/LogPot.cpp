@@ -40,30 +40,7 @@ double omega_p     = 0.022;         // pattern speed (rad/Myr)
 double pert_strength = 0.1;
 double v_c         = 0.22;          // kpc/Myr = 220 km/s
 
-static inline Vec2 cyl_vel_to_cart(double vR, double vphi, const Vec2& pos)
-{
-    double phi = std::atan2(pos.y, pos.x);
-    return {
-        vR * cos(phi) - vphi * sin(phi),
-        vR * sin(phi) + vphi * cos(phi)
-    };
-}
-
-static inline std::pair<double, double> cart_to_cyl_inertial(const Vec2& pos, const Vec2& vel)
-{
-    double R = std::hypot(pos.x, pos.y);
-    if (R < 1e-12) return {0.0, 0.0};
-
-    double c = pos.x / R;
-    double s = pos.y / R;
-
-    double vR   =  c * vel.x + s * vel.y;
-    double vphi = -s * vel.x + c * vel.y;
-
-    return {vR, vphi};
-}
-
-static inline double guiding_radius_from_L(double Lz)
+inline double guiding_radius_from_L(double Lz)
 {
     return Lz / v_c;
 }
@@ -71,11 +48,10 @@ static inline double guiding_radius_from_L(double Lz)
 // Effective potential 
 double effective_potential(const Vec2 &cart_pos, const bool &use_pert)
 {
-    Cyl cyl_pos = cartesian_to_cylindrical(cart_pos);
+    Cyl cyl_pos = cart_to_cyl(cart_pos);
 
     // Axisymmetric log potential
-    double log_pot_energy = 0.5 * v_c * v_c *
-        log(cart_pos.x * cart_pos.x + cart_pos.y * cart_pos.y);
+    double log_pot_energy = 0.5 * v_c * v_c * log(cart_pos.x * cart_pos.x + cart_pos.y * cart_pos.y);
 
     // Optional spiral perturbation
     double pert_energy = 0.0;
@@ -85,7 +61,7 @@ double effective_potential(const Vec2 &cart_pos, const bool &use_pert)
         double Sigma = Sigma_o * exp(-cyl_pos.R / R_o);
         double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
 
-        // Spiral-phase (no explicit time term in this snapshot version)
+        // constant Spiral-phase
         pert_energy = (Phi_S * pert_strength) * cos((alpha * log(cyl_pos.R / R_CR)) - m * cyl_pos.phi);
 
         // For a bar:
@@ -180,9 +156,7 @@ void scan_Lagrange_points(double xmin, double xmax, double ymin, double ymax, do
     // Output one representative (min grad) per cluster
     for (const auto& cluster : clusters)
     {
-        auto min_point = *std::min_element(
-            cluster.begin(), cluster.end(),
-            [](const GradCandidate& a, const GradCandidate& b)
+        auto min_point = *std::min_element(cluster.begin(), cluster.end(), [](const GradCandidate& a, const GradCandidate& b)
             { return std::get<2>(a) < std::get<2>(b); });
 
         fout_lagrange << std::get<0>(min_point) << " " << std::get<1>(min_point) << " " << std::get<2>(min_point) << "\n";
@@ -192,45 +166,46 @@ void scan_Lagrange_points(double xmin, double xmax, double ymin, double ymax, do
     fout_lagrange.close();
 }
 
-// Perturbation scaling profile
-double perturbation_scaling_factor(double t, double /*total_time*/)
+double perturbation_scaling_factor(double sim_time)
 {
-    const double t_start = 2000.0;
-    const double t_peak  = 2500.0;
-    const double t_end   = 3000.0;
-
-    if (t < t_start || t > t_end) return 0.0;
-
-    if (t < t_peak)  return (t - t_start) / (t_peak - t_start); // ramp up
-    return (t_end - t) / (t_end - t_peak);                      // ramp down
-}
-
-double perturbation_scaling_factor_with_hold(double t, double /*total_time*/)
-{
-    const double t_start   = 2000.0;
-    const double dur_up    = 200.0;
-    const double dur_hold  = 600.0;
-    const double dur_down  = 200.0;
-
+    //Variables for perturbation profile
+    double t_start  = 2000.0;
+    double dur_up   = 200.0;
+    double dur_hold = 600.0;
+    double dur_down = 200.0;
     const double t_up_end   = t_start + dur_up;
     const double t_hold_end = t_up_end + dur_hold;
     const double t_down_end = t_hold_end + dur_down;
 
-    if      (t <  t_start)    return 0.0;
-    else if (t <  t_up_end)   return (t - t_start) / dur_up;
-    else if (t <  t_hold_end) return 1.0;
-    else if (t <  t_down_end) return (t_down_end - t) / dur_down;
-    else                      return 0.0;
+    if (sim_time < t_start)
+        return 0.0;
+
+    // Ramp up
+    if (dur_up > 0.0 && sim_time < t_up_end)
+        return (sim_time - t_start) / dur_up;
+
+    // Immediate drop if dur_up == 0
+    if (dur_up == 0.0 && sim_time < t_hold_end)
+        return 1.0;
+
+    // Hold
+    if (sim_time < t_hold_end)
+        return 1.0;
+
+    // Ramp down
+    if (dur_down > 0.0 && sim_time < t_down_end)
+        return (t_down_end - sim_time) / dur_down;
+    
+    return 0.0;
 }
 
 // Energies (inertial and rotating-frame effective)
 // Not used during ramping version
 double total_potential_energy(const Vec2 &cart_pos, const double &sim_time)
 {
-    Cyl cyl_pos = cartesian_to_cylindrical(cart_pos);
+    Cyl cyl_pos = cart_to_cyl(cart_pos);
 
-    double log_pot_energy = 0.5 * v_c * v_c *
-        log(cart_pos.x * cart_pos.x + cart_pos.y * cart_pos.y);
+    double log_pot_energy = 0.5 * v_c * v_c * log(cart_pos.x * cart_pos.x + cart_pos.y * cart_pos.y);
 
     double kappa = alpha / cyl_pos.R;
     double Sigma = Sigma_o * exp(-cyl_pos.R / R_o);
@@ -250,12 +225,12 @@ double potential_energy_unperturbed(const Vec2 &pos)
 }
 
 // Time-dependent perturbation (ramp)
-double total_PE_time(const Vec2 &cart_pos, const double &sim_time, const double &total_time)
+double total_PE_time(const Vec2 &cart_pos, const double &sim_time)
 {
     if (pert_strength == 0.0)
         return potential_energy_unperturbed(cart_pos);
 
-    Cyl cyl_pos = cartesian_to_cylindrical(cart_pos);
+    Cyl cyl_pos = cart_to_cyl(cart_pos);
 
     double log_pot_energy = 0.5 * v_c * v_c * log(cart_pos.x * cart_pos.x + cart_pos.y * cart_pos.y);
 
@@ -263,7 +238,7 @@ double total_PE_time(const Vec2 &cart_pos, const double &sim_time, const double 
     double Sigma = Sigma_o * exp(-cyl_pos.R / R_o);
     double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
 
-    double scale = perturbation_scaling_factor(sim_time, total_time);
+    double scale = perturbation_scaling_factor(sim_time);
 
     double pert_energy = (Phi_S * pert_strength * scale) * cos(alpha * log(cyl_pos.R / R_CR) + m * omega_p * sim_time - m * cyl_pos.phi);
 
@@ -297,25 +272,58 @@ void Leapfrog_integrator_unperturbed(Vec2 &pos, Vec2 &vel, const double &dt)
     pos.y = r_half.y + 0.5 * dt * vel.y;
 }
 
-// Finite-difference acceleration from total_PE_time
 Vec2 total_acceleration(const Vec2 &cart_pos, const double &sim_time, const double &total_time)
 {
+    // If perturbation is disabled, just return axisymmetric log force
     if (pert_strength == 0.0)
-    {
         return LogPot_acc(cart_pos);
-    }
-    double delta = 1e-6;
 
-    Vec2 pos_dx_p{ cart_pos.x + delta, cart_pos.y };
-    Vec2 pos_dx_m{ cart_pos.x - delta, cart_pos.y };
-    Vec2 pos_dy_p{ cart_pos.x, cart_pos.y + delta };
-    Vec2 pos_dy_m{ cart_pos.x, cart_pos.y - delta };
+    const double x = cart_pos.x;
+    const double y = cart_pos.y;
 
-    double dVdx = (total_PE_time(pos_dx_m, sim_time, total_time) - total_PE_time(pos_dx_p, sim_time, total_time)) * 0.5 / delta;
-    double dVdy = (total_PE_time(pos_dy_m, sim_time, total_time) - total_PE_time(pos_dy_p, sim_time, total_time)) * 0.5 / delta;
+    const double R2 = x*x + y*y;
+    const double R  = std::sqrt(R2);
 
-    return { dVdx, dVdy };
+    // Guard against R -> 0 (log potential is singular anyway)
+    if (R < 1e-12)
+        return {0.0, 0.0};
+
+    const double phi = std::atan2(y, x);
+
+    const double dPhi0_dR = (v_c * v_c) / R;
+
+    const double Sigma = Sigma_o * std::exp(-R / R_o);
+    const double kappa = alpha / R;
+    const double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
+
+    // Time ramp scaling
+    const double scale = perturbation_scaling_factor(sim_time);
+
+    // Full perturbation amplitude A(R,t) multiplying cos(psi)
+    // Phi_pert = A(R,t) cos(psi)
+    const double A = Phi_S * pert_strength * scale;
+
+    // Phase: psi(R,phi,t) = alpha ln(R/R_CR) + m omega_p t - m phi
+    const double psi = alpha * std::log(R / R_CR) + m * omega_p * sim_time - m * phi;
+
+    const double cpsi = std::cos(psi);
+    const double spsi = std::sin(psi);
+
+    const double dA_dR = A * (1.0/R - 1.0/R_o);
+
+    const double dpsi_dR   = alpha / R;
+    const double dpsi_dphi = -m;
+
+    const double Phi_R   = dPhi0_dR + dA_dR * cpsi - A * spsi * dpsi_dR;
+    const double Phi_phi = -A * spsi * dpsi_dphi; // = + m A sin(psi)
+
+    const double dPhi_dx = Phi_R * (x / R) + Phi_phi * (-y / R2);
+    const double dPhi_dy = Phi_R * (y / R) + Phi_phi * ( x / R2);
+
+    // Acceleration = -grad Phi
+    return { -dPhi_dx, -dPhi_dy };
 }
+
 
 void Leapfrog_integrator_perturbed(Vec2 &pos, Vec2 &vel, const double &dt, const double &sim_time, const double &total_time)
 {
@@ -367,16 +375,16 @@ double jacobi_integral(const Vec2 &cart_pos, const Vec2 &cart_vel, const double 
     }
 
     double KE = kinetic_energy(cart_vel);
-    double PE = total_PE_time(cart_pos, sim_time, total_time);
+    double PE = total_PE_time(cart_pos, sim_time);
     double Lz = angular_momentum(cart_pos, cart_vel);
 
     // E_J = E - Ω_p Lz  (rotating-frame constant when Φ is steady in that frame)
     return KE + PE - (omega_p * Lz);
 }
 
-double effective_potential_time(const Vec2 &cart_pos, const bool &use_pert, double sim_time, double total_time)
+double effective_potential_time(const Vec2 &cart_pos, const bool &use_pert, double sim_time)
 {
-    Cyl cyl_pos = cartesian_to_cylindrical(cart_pos);
+    Cyl cyl_pos = cart_to_cyl(cart_pos);
 
     double log_pot_energy = 0.5 * v_c * v_c * log(cart_pos.x * cart_pos.x + cart_pos.y * cart_pos.y);
 
@@ -386,7 +394,7 @@ double effective_potential_time(const Vec2 &cart_pos, const bool &use_pert, doub
         double kappa = alpha / cyl_pos.R;
         double Sigma = Sigma_o * exp(-cyl_pos.R / R_o);
         double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
-        double scale = perturbation_scaling_factor(sim_time, total_time);
+        double scale = perturbation_scaling_factor(sim_time);
 
         pert_energy = (Phi_S * pert_strength * scale) * cos((alpha * log(cyl_pos.R / R_CR)) + m * omega_p * sim_time - m * cyl_pos.phi);
         // For a bar:
@@ -408,11 +416,11 @@ Vec2 effective_potential_gradient_time(const Vec2 &cart_pos, const bool &use_per
     Vec2 dy_neg = {cart_pos.x, cart_pos.y - delta};
 
     Vec2 grad;
-    grad.x = (effective_potential_time(dx_pos, use_pert, sim_time, total_time) -
-              effective_potential_time(dx_neg, use_pert, sim_time, total_time)) / (2.0 * delta);
+    grad.x = (effective_potential_time(dx_pos, use_pert, sim_time) -
+              effective_potential_time(dx_neg, use_pert, sim_time)) / (2.0 * delta);
 
-    grad.y = (effective_potential_time(dy_pos, use_pert, sim_time, total_time) - 
-              effective_potential_time(dy_neg, use_pert, sim_time, total_time)) / (2.0 * delta);
+    grad.y = (effective_potential_time(dy_pos, use_pert, sim_time) - 
+              effective_potential_time(dy_neg, use_pert, sim_time)) / (2.0 * delta);
 
     return grad;
 }
@@ -441,7 +449,7 @@ void simulate_trajectory(Vec2 &orbit_pos, Vec2 &orbit_vel, const std::string &ba
     for (int i = 0; i <= steps; i++)
     {
         double sim_time = static_cast<double>(i) * dt;
-        double scale = perturbation_scaling_factor(sim_time, total_time);
+        double scale = perturbation_scaling_factor(sim_time);
         bool perturb_active = use_pert && pert_strength > 0.0 && scale > 0.0;
 
         // Accelerations
@@ -453,19 +461,19 @@ void simulate_trajectory(Vec2 &orbit_pos, Vec2 &orbit_vel, const std::string &ba
 
         double KE = perturb_active ? kinetic_energy_inertial_frame(orbit_pos, orbit_vel) : kinetic_energy(orbit_vel);
 
-        double PE = perturb_active ? total_PE_time(orbit_pos, sim_time, total_time) : potential_energy_unperturbed(orbit_pos);
+        double PE = perturb_active ? total_PE_time(orbit_pos, sim_time) : potential_energy_unperturbed(orbit_pos);
 
         double E  = KE + PE;
         double EJ = perturb_active ? jacobi_integral(orbit_pos, orbit_vel, sim_time, total_time) : E;
         double R_L = Lz / v_c;
 
         // Rotating frame position
-        Cyl pos_cyl = cartesian_to_cylindrical(orbit_pos);
+        Cyl pos_cyl = cart_to_cyl(orbit_pos);
         Cyl pos_rot = pos_cyl;
         pos_rot.phi -= omega_p * sim_time;
         if (pos_rot.phi < 0)            pos_rot.phi += 2.0 * M_PI;
         if (pos_rot.phi >= 2.0 * M_PI)  pos_rot.phi -= 2.0 * M_PI;
-        Vec2 pos_rot_cart = cylindrical_to_cartesian(pos_rot);
+        Vec2 pos_rot_cart = cyl_to_cart(pos_rot);
 
         // Output
         trajectory_file << sim_time << "\t"<< orbit_pos.x << "\t" << orbit_pos.y << "\t" << pos_cyl.R << "\t" << pos_cyl.phi << "\n";
@@ -495,8 +503,7 @@ void simulate_trajectory(Vec2 &orbit_pos, Vec2 &orbit_vel, const std::string &ba
 }
 
 // Compare force due to logarithmic potential and spiral perturbation
-void map_force_ratios(double xmin, double xmax, double ymin, double ymax, double step, double sim_time, const double &total_time,
-                      const std::string& filename)
+void map_force_ratios(double xmin, double xmax, double ymin, double ymax, double step, double sim_time, const double &total_time, const std::string& filename)
 {
     std::ofstream fout(filename);
     fout << "# x\ty\t|F_perturb|/|F_axisym|\n";
@@ -537,7 +544,7 @@ void map_potential_ratios(double xmin, double xmax, double ymin, double ymax, do
         for (double x = xmin; x <= xmax; x += step)
         {
             Vec2 pos{ x, y };
-            Cyl cyl_pos = cartesian_to_cylindrical(pos);
+            Cyl cyl_pos = cart_to_cyl(pos);
 
             double phi_log = 0.5 * v_c * v_c * std::log(pos.x * pos.x + pos.y * pos.y);
 
@@ -545,7 +552,7 @@ void map_potential_ratios(double xmin, double xmax, double ymin, double ymax, do
             double Sigma = Sigma_o * std::exp(-cyl_pos.R / R_o);
             double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
 
-            double scale = perturbation_scaling_factor(sim_time, total_time);
+            double scale = perturbation_scaling_factor(sim_time);
 
             double phi_pert = (Phi_S * pert_strength * scale) * std::cos(alpha * std::log(cyl_pos.R / R_CR) - m * cyl_pos.phi);
 
@@ -563,7 +570,6 @@ void map_potential_ratios(double xmin, double xmax, double ymin, double ymax, do
     fout.close();
     std::cout << "Wrote potential ratio map to: " << filename << "\n";
 }
-
 
 // JR and random energy
 double getJRunperturbed(Vec2 pos0, Vec2 vel, double dt)
@@ -665,7 +671,7 @@ static void integrate_no_io(Vec2 pos, Vec2 vel, double total_time, double dt, bo
     for (int i = 0; i < steps; i++)
     {
         const double t = i * dt;
-        const bool perturb_active = use_pert && pert_strength > 0.0 && (perturbation_scaling_factor(t, total_time) > 0.0);
+        const bool perturb_active = use_pert && pert_strength > 0.0 && (perturbation_scaling_factor(t) > 0.0);
 
         if (perturb_active)
             Leapfrog_integrator_perturbed(pos, vel, dt, t, total_time);
@@ -696,32 +702,55 @@ int main(int argc, char** argv)
         }
     }
 
-    // Perturbation and total simulation durations
+    // Simulation durations
     double total_time = 5000.0;
     double dt = 0.01;
 
+    // --- Time series diagnostics at R=10 kpc, phi=0 ---
     std::ofstream fpert("phi_perturbation_time_series.dat");
     std::ofstream frat ("phi_ratio_time_series.dat");
     std::ofstream fstr ("pert_strength_time_series.dat");
+
+    if (!fpert || !frat || !fstr)
+    {
+        std::cerr << "Error: could not open one of the time-series output files.\n";
+        return 1;
+    }
 
     fpert << "# time [Myr]\tPhi_perturb\n";
     frat  << "# time [Myr]\t|Phi_pert| / |Phi_total|\n";
     fstr  << "# time [Myr]\ts(t)=ramp(0..1)\tA(t)=pert_strength*s(t)\n";
 
-    Vec2 pos = cylindrical_to_cartesian({10.0, 0.0});
+    Vec2 pos_probe = cyl_to_cart({10.0, 0.0});
     for (double t = 0.0; t <= total_time; t += dt)
     {
-        Cyl cyl = cartesian_to_cylindrical(pos);
+        Cyl cyl = cart_to_cyl(pos_probe);
+
+        // Guard (shouldn't happen here, but keeps formulas safe)
+        if (cyl.R < 1e-12)
+        {
+            fpert << t << "\t0\n";
+            frat  << t << "\t0\n";
+            fstr  << t << "\t0\t0\n";
+            continue;
+        }
 
         double kappa = alpha / cyl.R;
         double Sigma = Sigma_o * std::exp(-cyl.R / R_o);
         double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
-        double scale = perturbation_scaling_factor(t, total_time);
-        double phi_pert  = (Phi_S * pert_strength * scale) * std::cos(alpha * std::log(cyl.R / R_CR) + m * omega_p * t - m * cyl.phi);
+
+        double scale = perturbation_scaling_factor(t);
+
+        double phi_pert  = (Phi_S * pert_strength * scale) *
+            std::cos(alpha * std::log(cyl.R / R_CR) + m * omega_p * t - m * cyl.phi);
+
         double phi_total = 0.5 * v_c * v_c * std::log(cyl.R * cyl.R) + phi_pert;
 
         fpert << t << "\t" << phi_pert << "\n";
-        frat  << t << "\t" << std::fabs(phi_pert) / std::fabs(phi_total) << "\n";
+
+        double ratio = (std::fabs(phi_total) > 1e-12) ? (std::fabs(phi_pert) / std::fabs(phi_total)) : 0.0;
+        frat  << t << "\t" << ratio << "\n";
+
         fstr  << t << "\t" << scale << "\t" << (pert_strength * scale) << "\n";
     }
 
@@ -729,136 +758,158 @@ int main(int argc, char** argv)
     frat.close();
     fstr.close();
 
-    std::cout << "Wrote phi_perturbation_time_series.dat, " << "phi_ratio_time_series.dat, and " << "pert_strength_time_series.dat\n";
+    std::cout << "Wrote phi_perturbation_time_series.dat, phi_ratio_time_series.dat, and pert_strength_time_series.dat\n";
 
-    // --- Phi_eff snapshot ---
     double x_min = -20.0, x_max = 20.0;
     double y_min = -20.0, y_max = 20.0;
     double step  = 0.1;
 
-    std::ofstream fout("phi_eff.dat");
-    fout << "# x [kpc]\ty [kpc]\tPhi_eff(x,y)\n";
-
-    for (double y = y_min; y <= y_max; y += step)
     {
-        for (double x = x_min; x <= x_max; x += step)
+        std::ofstream fout("phi_eff.dat");
+        if (!fout)
         {
-            Vec2 pos_xy{ x, y };
-            double snapshot_time = 2500.0; // peak of ramp
-            double phi = effective_potential_time(pos_xy, use_pert, snapshot_time, total_time);
-            fout << x << "\t" << y << "\t" << phi << "\n";
+            std::cerr << "Error: could not open phi_eff.dat\n";
+            return 1;
         }
-        fout << "\n";
+
+        fout << "# x [kpc]\ty [kpc]\tPhi_eff(x,y)\n";
+
+        const double snapshot_time = 2500.0; // peak of ramp
+        for (double y = y_min; y <= y_max; y += step)
+        {
+            for (double x = x_min; x <= x_max; x += step)
+            {
+                Vec2 pos_xy{ x, y };
+                double phi_eff = effective_potential_time(pos_xy, use_pert, snapshot_time);
+                fout << x << "\t" << y << "\t" << phi_eff << "\n";
+            }
+            fout << "\n";
+        }
     }
 
-    fout.close();
     std::cout << "Wrote phi_eff.dat (perturbation " << (use_pert ? "on" : "off") << ")\n";
 
-    // --- Lagrange points ---
     scan_Lagrange_points(x_min, x_max, y_min, y_max, step, "grad_phi_eff.dat", use_pert);
     std::cout << "Wrote grad_phi_eff.dat and lagrange_points.dat\n";
 
-    // --- Batch: DF_initial_conditions -> deltaLz_from_DF.dat ---
-    std::ifstream fin("DF_initial_conditions.dat");
-    if (!fin)
     {
-        std::cerr << "Could not open DF_initial_conditions.dat\n";
-        // continue to single-orbit outputs
-    }
-    else
-    {
-        std::ofstream out("deltaLz_from_DF.dat");
-        out << "# id  R  x  y  vR  vphi  Lz0  Lz_end  dLz  JR0  JR_end  dJR  eR0  eR_end  deR  vR1\n";
-
-        std::string line;
-        int id = 0;
-        std::size_t N_rows = 0;
-        double sum_dLz = 0.0, sum_dJR = 0.0;
-
-        while (std::getline(fin, line))
+        std::ifstream fin("DF_initial_conditions.dat");
+        if (!fin)
         {
-            if (line.empty() || line[0] == '#') continue;
-
-            double R, L, vR, vphi, g1, sigma_corr, g2, x, y;
-            std::istringstream iss(line);
-            if (!(iss >> R >> L >> vR >> vphi >> g1 >> sigma_corr >> g2 >> x >> y))
-                continue;
-
-            Vec2 pos0{ x, y };
-            Vec2 vel0 = cyl_vel_to_cart(vR, vphi, pos0);
-
-            Vec2 pos_end, vel_end;
-            double Lz0 = 0.0, Lz_end = 0.0;
-            double JR0 = 0.0, JR_end = 0.0;
-            double eR0 = 0.0, eR_end = 0.0;
-
-            integrate_no_io(pos0, vel0, total_time, dt, use_pert, Lz0, Lz_end, JR0, JR_end, eR0, eR_end, &pos_end, &vel_end);
-
-            double dLz = (Lz_end - Lz0);
-            double dJR = (JR_end - JR0);
-            double deR = (eR_end - eR0);
-
-            double vR1 = cart_to_cyl_inertial(pos_end, vel_end).first;
-
-            out << id << ' ' << R << ' ' << x << ' ' << y << ' ' << vR << ' ' << vphi << ' ' << Lz0 << ' ' << Lz_end << ' ' << dLz << ' '
-                << JR0 << ' ' << JR_end << ' ' << dJR << ' ' << eR0 << ' ' << eR_end << ' ' << deR << ' ' << vR1 << '\n';
-
-            sum_dLz += dLz;
-            sum_dJR += dJR;
-            ++id;
-            ++N_rows;
-        }
-
-        out.close();
-        fin.close();
-
-        double mean_dLz = (N_rows > 0) ? (sum_dLz / N_rows) : 0.0;
-        std::cout << "Average ΔLz = " << mean_dLz << " (from " << N_rows << " stars)\n";
-        std::cout << "Wrote deltaLz_from_DF.dat (combined Lz, JR, eR columns)\n";
-    }
-
-    // Collect samples from this run for RMS in a fixed CR window
-    std::ifstream fin2("deltaLz_from_DF.dat");
-    if (!fin2)
-    {
-        std::cerr << "Could not open deltaLz_from_DF.dat for RMS calc\n";
-    }
-    else
-    {
-        double Lz0, dLz;
-        double sum2 = 0.0;
-        int N = 0;
-
-        std::string line;
-        while (std::getline(fin2, line))
-        {
-            if (line.empty() || line[0] == '#') continue;
-            std::istringstream iss(line);
-
-            int id;
-            double R, x, y, vR, vphi, Lz_end, JR0, JR_end, dJR, eR0, eR_end, deR, vR1;
-            if (!(iss >> id >> R >> x >> y >> vR >> vphi >> Lz0 >> Lz_end >> dLz >> JR0 >> JR_end >> dJR >> eR0 >> eR_end >> deR >> vR1))
-                continue;
-
-            if (Lz0 >= 2.0 && Lz0 <= 2.4) // fixed CR window
-            {
-                sum2 += dLz * dLz;
-                ++N;
-            }
-        }
-
-        if (N > 0)
-        {
-            double rms = std::sqrt(sum2 / double(N));
-            std::cout << "RMS(ΔLz) in CR window [2.0, 2.4] = " << rms << " (N=" << N << ")\n";
+            std::cerr << "Could not open DF_initial_conditions.dat\n";
         }
         else
         {
-            std::cout << "No stars in CR window [2.0, 2.4]\n";
+            std::ofstream out("deltaLz_from_DF.dat");
+            if (!out)
+            {
+                std::cerr << "Could not open deltaLz_from_DF.dat for writing\n";
+                return 1;
+            }
+
+            // DF file format (6 columns):
+            // R  L  v_R  v_phi  x  y
+            out << "# id  R  x  y  vR  vphi  Lz0  Lz_end  dLz  JR0  JR_end  dJR  eR0  eR_end  deR  vR_end\n";
+
+            std::string line;
+            int id = 0;
+            std::size_t N_rows = 0;
+            double sum_dLz = 0.0, sum_dJR = 0.0;
+
+            while (std::getline(fin, line))
+            {
+                if (line.empty() || line[0] == '#') continue;
+
+                double R, L, vR, vphi, x, y;
+                std::istringstream iss(line);
+                if (!(iss >> R >> L >> vR >> vphi >> x >> y))
+                    continue;
+
+                Vec2 pos0{ x, y };
+                Vec2 vel0 = cyl_to_cart_vel(vR, vphi, pos0);
+
+                Vec2 pos_end, vel_end;
+                double Lz0 = 0.0, Lz_end = 0.0;
+                double JR0 = 0.0, JR_end = 0.0;
+                double eR0 = 0.0, eR_end = 0.0;
+
+                integrate_no_io(pos0, vel0, total_time, dt, use_pert, Lz0, Lz_end, JR0, JR_end, eR0, eR_end, &pos_end, &vel_end);
+
+                const double dLz = (Lz_end - Lz0);
+                const double dJR = (JR_end - JR0);
+                const double deR = (eR_end - eR0);
+
+                const double vR_end = cart_to_cyl_inertial(pos_end, vel_end).x;
+
+                out << id << ' ' << R << ' ' << x << ' ' << y << ' ' << vR << ' ' << vphi << ' ' << Lz0 << ' ' << Lz_end << ' ' << dLz << ' '
+                    << JR0 << ' ' << JR_end << ' ' << dJR << ' ' << eR0 << ' ' << eR_end << ' ' << deR << ' ' << vR_end << '\n';
+
+                sum_dLz += dLz;
+                sum_dJR += dJR;
+                id++;
+                N_rows++;
+            }
+
+            out.close();
+            fin.close();
+
+            double mean_dLz = (N_rows > 0) ? (sum_dLz / N_rows) : 0.0;
+            std::cout << "Average ΔLz = " << mean_dLz << " (from " << N_rows << " stars)\n";
+            std::cout << "Wrote deltaLz_from_DF.dat (6-col DF input)\n";
         }
     }
 
-    // Initialize a few orbits close to corotation
+    {
+        std::ifstream fin2("deltaLz_from_DF.dat");
+        if (!fin2)
+        {
+            std::cerr << "Could not open deltaLz_from_DF.dat for RMS calc\n";
+        }
+        else
+        {
+            double sum2 = 0.0;
+            int N = 0;
+
+            std::string line;
+            while (std::getline(fin2, line))
+            {
+                if (line.empty() || line[0] == '#') continue;
+
+                int id;
+                double R, x, y, vR, vphi;
+                double Lz0, Lz_end, dLz;
+                double JR0, JR_end, dJR;
+                double eR0, eR_end, deR;
+                double vR_end;
+
+                std::istringstream iss(line);
+                if (!(iss >> id >> R >> x >> y >> vR >> vphi
+                          >> Lz0 >> Lz_end >> dLz
+                          >> JR0 >> JR_end >> dJR
+                          >> eR0 >> eR_end >> deR
+                          >> vR_end))
+                    continue;
+
+                if (Lz0 >= 2.0 && Lz0 <= 16.0) // your "CR window"
+                {
+                    sum2 += dLz * dLz;
+                    ++N;
+                }
+            }
+
+            if (N > 0)
+            {
+                double rms = std::sqrt(sum2 / double(N));
+                std::cout << "RMS(ΔLz) in CR window [2.0, 16.0] = " << rms << " (N=" << N << ")\n";
+            }
+            else
+            {
+                std::cout << "No stars in CR window [2.0, 16.0]\n";
+            }
+        }
+    }
+
+    //Singel orbits for parameter verifications
     std::vector<Vec2> initial_pos =
     {
         { 10.2,  0.0 },
@@ -883,6 +934,30 @@ int main(int argc, char** argv)
         basename << "orbit_L" << i;
         simulate_trajectory(p, v, basename.str(), total_time, dt, use_pert);
     }
-
     return 0;
 }
+
+/*
+// Finite-difference acceleration from total_PE_time
+Vec2 total_acceleration(const Vec2 &cart_pos, const double &sim_time, const double &total_time)
+{
+    if (pert_strength == 0.0)
+    {
+        return LogPot_acc(cart_pos);
+    }
+    double delta = 1e-6;
+
+    Vec2 pos_dx_p{ cart_pos.x + delta, cart_pos.y };
+    Vec2 pos_dx_m{ cart_pos.x - delta, cart_pos.y };
+    Vec2 pos_dy_p{ cart_pos.x, cart_pos.y + delta };
+    Vec2 pos_dy_m{ cart_pos.x, cart_pos.y - delta };
+
+    double dVdx = (total_PE_time(pos_dx_m, sim_time) - total_PE_time(pos_dx_p, sim_time)) * 0.5 / delta;
+    double dVdy = (total_PE_time(pos_dy_m, sim_time) - total_PE_time(pos_dy_p, sim_time)) * 0.5 / delta;
+
+    return { dVdx, dVdy };
+}
+*/
+
+
+  

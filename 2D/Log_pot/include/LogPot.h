@@ -25,10 +25,10 @@ double effective_potential(const Vec2&, const bool&);
 Vec2 effective_potential_gradient(const Vec2&, const bool&);
 bool is_near_cluster(const std::vector<std::tuple<double, double, double>>&, const std::tuple<double, double, double>&, double);
 void scan_Lagrange_points(double, double, double, double, double, const std::string&, bool);
-double perturbation_scaling_factor(double, double);
+double perturbation_scaling_factor(double);
 double total_potential_energy(const Vec2&, const double&);
 double potential_energy_unperturbed(const Vec2&);
-double total_PE_time(const Vec2&, const double&, const double&);
+double total_PE_time(const Vec2&, const double&);
 Vec2 LogPot_acc(const Vec2&);
 void Leapfrog_integrator_unperturbed(Vec2&, Vec2&, const double&);
 void Leapfrog_integrator_perturbed(Vec2&, Vec2&, const double&, const double&, const double&);
@@ -38,7 +38,7 @@ Vec2 total_acceleration(const Vec2&, const double&, const double&);
 double kinetic_energy_inertial_frame(const Vec2&, const Vec2&);
 double angular_momentum_inertial_frame(const Vec2&, const Vec2&);
 double jacobi_integral(const Vec2&, const Vec2&, const double&, const double&);
-double effective_potential_time(const Vec2&, const bool&, double, double);
+double effective_potential_time(const Vec2&, const bool&, double);
 Vec2   effective_potential_gradient_time(const Vec2&, const bool&, double, double);
 
 

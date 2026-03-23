@@ -70,7 +70,7 @@ Vec3 cylindrical_to_cartesian(const Cyl &cyl)
     return { x, y, z };
 }
 
-Cyl cartesian_to_cylindrical(const Vec3 &pos) 
+Cyl cart_to_cyl(const Vec3 &pos) 
 {
     double R = std::sqrt(pos.x * pos.x + pos.y * pos.y);       
     double phi = std::atan2(pos.y, pos.x);                   
