@@ -11,7 +11,6 @@
 #include <sstream>
 #include <tuple>
 #include <functional>
-
 #include "VecUtils.h"
 #include "LogPot.h"
 
@@ -21,7 +20,6 @@ using std::ofstream;
 using GradCandidate = std::tuple<double, double, double>; // [x, y, gradient]
 using std::cos;
 using std::sin;
-using std::tan;
 using std::log;
 
 // Global parameters
@@ -173,9 +171,9 @@ double perturbation_scaling_factor(double sim_time)
     double dur_up   = 200.0;
     double dur_hold = 600.0;
     double dur_down = 200.0;
-    const double t_up_end   = t_start + dur_up;
-    const double t_hold_end = t_up_end + dur_hold;
-    const double t_down_end = t_hold_end + dur_down;
+    double t_up_end   = t_start + dur_up;
+    double t_hold_end = t_up_end + dur_hold;
+    double t_down_end = t_hold_end + dur_down;
 
     if (sim_time < t_start)
         return 0.0;
@@ -272,67 +270,64 @@ void Leapfrog_integrator_unperturbed(Vec2 &pos, Vec2 &vel, const double &dt)
     pos.y = r_half.y + 0.5 * dt * vel.y;
 }
 
-Vec2 total_acceleration(const Vec2 &cart_pos, const double &sim_time, const double &total_time)
+Vec2 total_acceleration(const Vec2 &cart_pos, const double &sim_time)
 {
     // If perturbation is disabled, just return axisymmetric log force
     if (pert_strength == 0.0)
         return LogPot_acc(cart_pos);
 
-    const double x = cart_pos.x;
-    const double y = cart_pos.y;
+    double x = cart_pos.x;
+    double y = cart_pos.y;
 
-    const double R2 = x*x + y*y;
-    const double R  = std::sqrt(R2);
+    double R_squared = x*x + y*y;
+    double R  = std::sqrt(R_squared);
+    double phi = std::atan2(y, x);
 
-    // Guard against R -> 0 (log potential is singular anyway)
+    //Guard against R -> 0 
     if (R < 1e-12)
         return {0.0, 0.0};
 
-    const double phi = std::atan2(y, x);
+    double dPhi0_dR = (v_c * v_c) / R;
 
-    const double dPhi0_dR = (v_c * v_c) / R;
+    double Sigma = Sigma_o * std::exp(-R / R_o);
+    double kappa = alpha / R;
+    double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
 
-    const double Sigma = Sigma_o * std::exp(-R / R_o);
-    const double kappa = alpha / R;
-    const double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
+    //Find the amplitude(A) of the perturbation
+    double scale = perturbation_scaling_factor(sim_time);
 
-    // Time ramp scaling
-    const double scale = perturbation_scaling_factor(sim_time);
+    double pert_Amplitude = Phi_S * pert_strength * scale;
 
-    // Full perturbation amplitude A(R,t) multiplying cos(psi)
-    // Phi_pert = A(R,t) cos(psi)
-    const double A = Phi_S * pert_strength * scale;
+    //ψ = alpha ln(R/R_CR) + m ω_p t - mφ
+    double psi = alpha * std::log(R / R_CR) + m * omega_p * sim_time - m * phi;
 
-    // Phase: psi(R,phi,t) = alpha ln(R/R_CR) + m omega_p t - m phi
-    const double psi = alpha * std::log(R / R_CR) + m * omega_p * sim_time - m * phi;
+    double cpsi = cos(psi);
+    double spsi = sin(psi);
 
-    const double cpsi = std::cos(psi);
-    const double spsi = std::sin(psi);
+    double dA_dR = pert_Amplitude * (1.0/R - 1.0/R_o);
 
-    const double dA_dR = A * (1.0/R - 1.0/R_o);
+    double dpsi_dR   = alpha / R;
+    double dpsi_dphi = -m;
 
-    const double dpsi_dR   = alpha / R;
-    const double dpsi_dphi = -m;
+    double dPhi_dR   = dPhi0_dR + dA_dR * cpsi - pert_Amplitude * spsi * dpsi_dR;
+    double dPhi_dphi = m * pert_Amplitude * spsi; 
 
-    const double Phi_R   = dPhi0_dR + dA_dR * cpsi - A * spsi * dpsi_dR;
-    const double Phi_phi = -A * spsi * dpsi_dphi; // = + m A sin(psi)
+    double dPhi_dx = dPhi_dR * (x / R) + dPhi_dphi * (-y / R_squared);
+    double dPhi_dy = dPhi_dR * (y / R) + dPhi_dphi * ( x / R_squared);
 
-    const double dPhi_dx = Phi_R * (x / R) + Phi_phi * (-y / R2);
-    const double dPhi_dy = Phi_R * (y / R) + Phi_phi * ( x / R2);
-
-    // Acceleration = -grad Phi
+    //Acceleration=-∇Φ
     return { -dPhi_dx, -dPhi_dy };
 }
 
 
-void Leapfrog_integrator_perturbed(Vec2 &pos, Vec2 &vel, const double &dt, const double &sim_time, const double &total_time)
+void Leapfrog_integrator_perturbed(Vec2 &pos, Vec2 &vel, const double &dt, const double &sim_time)
 {
     // drift
     pos.x += 0.5 * dt * vel.x;
     pos.y += 0.5 * dt * vel.y;
 
     // kick
-    Vec2 a = total_acceleration(pos, sim_time, total_time);
+    Vec2 a = total_acceleration(pos, sim_time + (0.5 * dt));
     vel.x += dt * a.x;
     vel.y += dt * a.y;
 
@@ -454,7 +449,7 @@ void simulate_trajectory(Vec2 &orbit_pos, Vec2 &orbit_vel, const std::string &ba
 
         // Accelerations
         Vec2 log_acc = LogPot_acc(orbit_pos);
-        Vec2 tot_acc = perturb_active ? total_acceleration(orbit_pos, sim_time, total_time) : log_acc;
+        Vec2 tot_acc = perturb_active ? total_acceleration(orbit_pos, sim_time) : log_acc;
 
         // Energies & Momenta
         double Lz = perturb_active ? angular_momentum_inertial_frame(orbit_pos, orbit_vel) : angular_momentum(orbit_pos, orbit_vel);
@@ -491,7 +486,7 @@ void simulate_trajectory(Vec2 &orbit_pos, Vec2 &orbit_vel, const std::string &ba
         }
 
         if (perturb_active)
-            Leapfrog_integrator_perturbed(orbit_pos, orbit_vel, dt, sim_time, total_time);
+            Leapfrog_integrator_perturbed(orbit_pos, orbit_vel, dt, sim_time);
         else
             Leapfrog_integrator_unperturbed(orbit_pos, orbit_vel, dt);
     }
@@ -515,7 +510,7 @@ void map_force_ratios(double xmin, double xmax, double ymin, double ymax, double
             Vec2 pos{ x, y };
 
             Vec2 F_axisym = LogPot_acc(pos);
-            Vec2 F_total  = total_acceleration(pos, sim_time, total_time);
+            Vec2 F_total  = total_acceleration(pos, sim_time);
 
             Vec2 F_perturb{ F_total.x - F_axisym.x,  F_total.y - F_axisym.y };
 
@@ -674,7 +669,7 @@ static void integrate_no_io(Vec2 pos, Vec2 vel, double total_time, double dt, bo
         const bool perturb_active = use_pert && pert_strength > 0.0 && (perturbation_scaling_factor(t) > 0.0);
 
         if (perturb_active)
-            Leapfrog_integrator_perturbed(pos, vel, dt, t, total_time);
+            Leapfrog_integrator_perturbed(pos, vel, dt, t);
         else
             Leapfrog_integrator_unperturbed(pos, vel, dt);
     }
@@ -741,8 +736,7 @@ int main(int argc, char** argv)
 
         double scale = perturbation_scaling_factor(t);
 
-        double phi_pert  = (Phi_S * pert_strength * scale) *
-            std::cos(alpha * std::log(cyl.R / R_CR) + m * omega_p * t - m * cyl.phi);
+        double phi_pert  = (Phi_S * pert_strength * scale) * cos(alpha * log(cyl.R / R_CR) + m * omega_p * t - m * cyl.phi);
 
         double phi_total = 0.5 * v_c * v_c * std::log(cyl.R * cyl.R) + phi_pert;
 
@@ -890,7 +884,7 @@ int main(int argc, char** argv)
                           >> vR_end))
                     continue;
 
-                if (Lz0 >= 2.0 && Lz0 <= 16.0) // your "CR window"
+                if (Lz0 >= 2.0 && Lz0 <= 16.0) 
                 {
                     sum2 += dLz * dLz;
                     ++N;
@@ -909,7 +903,7 @@ int main(int argc, char** argv)
         }
     }
 
-    //Singel orbits for parameter verifications
+    //Single orbits for parameter verification
     std::vector<Vec2> initial_pos =
     {
         { 10.2,  0.0 },
