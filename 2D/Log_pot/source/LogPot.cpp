@@ -38,9 +38,37 @@ double omega_p     = 0.022;         // pattern speed (rad/Myr)
 double pert_strength = 0.1;
 double v_c         = 0.22;          // kpc/Myr = 220 km/s
 
+// Smooth radial envelope for the spiral perturbation only.
+// W(R_sp_taper)=0.5. Larger n_sp_taper gives a sharper, but still smooth, cutoff.
+double R_sp_taper = 5.0;            // kpc; tune this to suppress the low-Lz/inner response
+double n_sp_taper = 6.0;            // dimensionless; use an even value such as 4, 6, or 8
+
 inline double guiding_radius_from_L(double Lz)
 {
     return Lz / v_c;
+}
+
+
+double spiral_radial_envelope(double R)
+{
+    if (R_sp_taper <= 0.0)
+        return 1.0;
+
+    if (R <= 0.0)
+        return 0.0;
+
+    const double q  = R / R_sp_taper;
+    const double qn = std::pow(q, n_sp_taper);
+    return qn / (1.0 + qn);
+}
+
+double d_spiral_radial_envelope_dR(double R)
+{
+    if (R_sp_taper <= 0.0 || R <= 1e-12)
+        return 0.0;
+
+    const double W = spiral_radial_envelope(R);
+    return (n_sp_taper / R) * W * (1.0 - W);
 }
 
 // Effective potential 
@@ -58,9 +86,10 @@ double effective_potential(const Vec2 &cart_pos, const bool &use_pert)
         double kappa = alpha / cyl_pos.R;
         double Sigma = Sigma_o * exp(-cyl_pos.R / R_o);
         double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
+        double W = spiral_radial_envelope(cyl_pos.R);
 
         // constant Spiral-phase
-        pert_energy = (Phi_S * pert_strength) * cos((alpha * log(cyl_pos.R / R_CR)) - m * cyl_pos.phi);
+        pert_energy = (Phi_S * W * pert_strength) * cos((alpha * log(cyl_pos.R / R_CR)) - m * cyl_pos.phi);
 
         // For a bar:
         // pert_energy = (Phi_S * pert_strength) * cos(m * cyl_pos.phi);
@@ -208,8 +237,9 @@ double total_potential_energy(const Vec2 &cart_pos, const double &sim_time)
     double kappa = alpha / cyl_pos.R;
     double Sigma = Sigma_o * exp(-cyl_pos.R / R_o);
     double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
+    double W = spiral_radial_envelope(cyl_pos.R);
 
-    double pert_energy = (Phi_S * pert_strength) * cos(alpha * log(cyl_pos.R / R_CR) + m * omega_p * sim_time - m * cyl_pos.phi);
+    double pert_energy = (Phi_S * W * pert_strength) * cos(alpha * log(cyl_pos.R / R_CR) + m * omega_p * sim_time - m * cyl_pos.phi);
 
     // For a bar:
     // double pert_energy = (Phi_S * pert_strength) * cos(m*omega_p*sim_time + m * cyl_pos.phi);
@@ -235,10 +265,11 @@ double total_PE_time(const Vec2 &cart_pos, const double &sim_time)
     double kappa = alpha / cyl_pos.R;
     double Sigma = Sigma_o * exp(-cyl_pos.R / R_o);
     double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
+    double W = spiral_radial_envelope(cyl_pos.R);
 
     double scale = perturbation_scaling_factor(sim_time);
 
-    double pert_energy = (Phi_S * pert_strength * scale) * cos(alpha * log(cyl_pos.R / R_CR) + m * omega_p * sim_time - m * cyl_pos.phi);
+    double pert_energy = (Phi_S * W * pert_strength * scale) * cos(alpha * log(cyl_pos.R / R_CR) + m * omega_p * sim_time - m * cyl_pos.phi);
 
     // For a bar:
     // double pert_energy = (Phi_S * pert_strength * scale) * cos(m * omega_p * sim_time - m * cyl_pos.phi);
@@ -296,7 +327,10 @@ Vec2 total_acceleration(const Vec2 &cart_pos, const double &sim_time)
     //Find the amplitude(A) of the perturbation
     double scale = perturbation_scaling_factor(sim_time);
 
-    double pert_Amplitude = Phi_S * pert_strength * scale;
+    double W    = spiral_radial_envelope(R);
+    double dW_dR = d_spiral_radial_envelope_dR(R);
+
+    double pert_Amplitude = Phi_S * W * pert_strength * scale;
 
     //ψ = alpha ln(R/R_CR) + m ω_p t - mφ
     double psi = alpha * std::log(R / R_CR) + m * omega_p * sim_time - m * phi;
@@ -304,7 +338,10 @@ Vec2 total_acceleration(const Vec2 &cart_pos, const double &sim_time)
     double cpsi = cos(psi);
     double spsi = sin(psi);
 
-    double dA_dR = pert_Amplitude * (1.0/R - 1.0/R_o);
+    // d/dR [Phi_S(R) * W(R) * pert_strength * scale]
+    // Phi_S ∝ R exp(-R/R_o), so dPhi_S/dR = Phi_S * (1/R - 1/R_o).
+    double dPhiS_dR = Phi_S * (1.0/R - 1.0/R_o);
+    double dA_dR = pert_strength * scale * (dPhiS_dR * W + Phi_S * dW_dR);
 
     double dpsi_dR   = alpha / R;
     double dpsi_dphi = -m;
@@ -389,9 +426,10 @@ double effective_potential_time(const Vec2 &cart_pos, const bool &use_pert, doub
         double kappa = alpha / cyl_pos.R;
         double Sigma = Sigma_o * exp(-cyl_pos.R / R_o);
         double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
+        double W = spiral_radial_envelope(cyl_pos.R);
         double scale = perturbation_scaling_factor(sim_time);
 
-        pert_energy = (Phi_S * pert_strength * scale) * cos((alpha * log(cyl_pos.R / R_CR)) + m * omega_p * sim_time - m * cyl_pos.phi);
+        pert_energy = (Phi_S * W * pert_strength * scale) * cos((alpha * log(cyl_pos.R / R_CR)) + m * omega_p * sim_time - m * cyl_pos.phi);
         // For a bar:
         // pert_energy = (Phi_S * pert_strength * scale) * cos(m * omega_p * sim_time - m * cyl_pos.phi);
     }
@@ -546,10 +584,11 @@ void map_potential_ratios(double xmin, double xmax, double ymin, double ymax, do
             double kappa = alpha / cyl_pos.R;
             double Sigma = Sigma_o * std::exp(-cyl_pos.R / R_o);
             double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
+            double W = spiral_radial_envelope(cyl_pos.R);
 
             double scale = perturbation_scaling_factor(sim_time);
 
-            double phi_pert = (Phi_S * pert_strength * scale) * std::cos(alpha * std::log(cyl_pos.R / R_CR) - m * cyl_pos.phi);
+            double phi_pert = (Phi_S * W * pert_strength * scale) * std::cos(alpha * std::log(cyl_pos.R / R_CR) + m * omega_p * sim_time - m * cyl_pos.phi);
 
             // For a bar:
             // double phi_pert = (Phi_S * pert_strength * scale) * std::cos(m * cyl_pos.phi);
@@ -733,10 +772,11 @@ int main(int argc, char** argv)
         double kappa = alpha / cyl.R;
         double Sigma = Sigma_o * std::exp(-cyl.R / R_o);
         double Phi_S = (2.0 * M_PI * G * e_s * Sigma) / kappa;
+        double W = spiral_radial_envelope(cyl.R);
 
         double scale = perturbation_scaling_factor(t);
 
-        double phi_pert  = (Phi_S * pert_strength * scale) * cos(alpha * log(cyl.R / R_CR) + m * omega_p * t - m * cyl.phi);
+        double phi_pert  = (Phi_S * W * pert_strength * scale) * cos(alpha * log(cyl.R / R_CR) + m * omega_p * t - m * cyl.phi);
 
         double phi_total = 0.5 * v_c * v_c * std::log(cyl.R * cyl.R) + phi_pert;
 

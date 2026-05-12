@@ -19,6 +19,8 @@ extern double alpha;
 extern double omega_p;
 extern double pert_strength;
 extern double v_c;
+extern double R_sp_taper;
+extern double n_sp_taper;
 
 // Function declarations
 double effective_potential(const Vec2&, const bool&);
@@ -26,6 +28,8 @@ Vec2 effective_potential_gradient(const Vec2&, const bool&);
 bool is_near_cluster(const std::vector<std::tuple<double, double, double>>&, const std::tuple<double, double, double>&, double);
 void scan_Lagrange_points(double, double, double, double, double, const std::string&, bool);
 double perturbation_scaling_factor(double);
+double spiral_radial_envelope(double);
+double d_spiral_radial_envelope_dR(double);
 double total_potential_energy(const Vec2&, const double&);
 double potential_energy_unperturbed(const Vec2&);
 double total_PE_time(const Vec2&, const double&);
