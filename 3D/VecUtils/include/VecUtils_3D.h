@@ -1,27 +1,24 @@
-#ifndef VecUtils_h
-#define VecUtils_h
-
-#include <iostream>
-#include <vector>
+#pragma once
 #include <cmath>
 
 struct Vec3 
 {
     double x, y, z;
 };
-Vec3 operator+(const Vec3 &v1, const Vec3 &v2) 
+
+inline Vec3 operator+(const Vec3 &v1, const Vec3 &v2) 
 {
     return { v1.x + v2.x, v1.y + v2.y, v1.z + v2.z };
 }
-Vec3 operator-(const Vec3 &v1, const Vec3 &v2) 
+inline Vec3 operator-(const Vec3 &v1, const Vec3 &v2) 
 {
     return { v1.x - v2.x, v1.y - v2.y, v1.z - v2.z };
 }
-Vec3 operator*(Vec3 const& v, double scalar)
+inline Vec3 operator*(Vec3 const& v, double scalar)
 {
     return { v.x * scalar, v.y * scalar, v.z * scalar };
 }
-Vec3 operator/(Vec3 const& v, double scalar) 
+inline Vec3 operator/(Vec3 const& v, double scalar) 
 {
     return { v.x / scalar, v.y / scalar, v.z / scalar };
 }
@@ -30,26 +27,27 @@ struct Cyl
 {
     double R, phi, z;
 };
-Cyl operator+(const Cyl &c1, const Cyl &c2)
+
+inline Cyl operator+(const Cyl &c1, const Cyl &c2)
 {
     return { c1.R + c2.R, c1.phi + c2.phi, c1.z + c2.z };
 }
-Cyl operator-(const Cyl &c1, const Cyl &c2) 
+inline Cyl operator-(const Cyl &c1, const Cyl &c2) 
 {
     return { c1.R - c2.R, c1.phi - c2.phi, c1.z - c2.z };
 }
-Cyl operator*(const Cyl &c, double scalar)
+inline Cyl operator*(const Cyl &c, double scalar)
 {
     return { c.R * scalar, c.phi * scalar, c.z * scalar };
 }
-Cyl operator/(const Cyl &c, double scalar) 
+inline Cyl operator/(const Cyl &c, double scalar) 
 {
     return { c.R / scalar, c.phi / scalar, c.z / scalar };
 }
 
 //////Conversion between coordinate functions////////////
 
-Vec3 cylindrical_vel_to_cartesian(const Cyl &pos, const Cyl &vel)
+inline Vec3 cyl_to_cart_vel(const Cyl &pos, const Cyl &vel)
 {
     double cos_phi = std::cos(pos.phi);
     double sin_phi = std::sin(pos.phi);
@@ -61,7 +59,7 @@ Vec3 cylindrical_vel_to_cartesian(const Cyl &pos, const Cyl &vel)
     return { vx, vy, vz };
 }
 
-Vec3 cylindrical_to_cartesian(const Cyl &cyl) 
+inline Vec3 cyl_to_cart(const Cyl &cyl) 
 {
     double x = cyl.R * std::cos(cyl.phi);
     double y = cyl.R * std::sin(cyl.phi);
@@ -70,7 +68,7 @@ Vec3 cylindrical_to_cartesian(const Cyl &cyl)
     return { x, y, z };
 }
 
-Cyl cart_to_cyl(const Vec3 &pos) 
+inline Cyl cart_to_cyl(const Vec3 &pos) 
 {
     double R = std::sqrt(pos.x * pos.x + pos.y * pos.y);       
     double phi = std::atan2(pos.y, pos.x);                   
@@ -80,7 +78,7 @@ Cyl cart_to_cyl(const Vec3 &pos)
     return { R, phi, z };
 }
 
-Vec3 cross_product(const Vec3& a, const Vec3& b)
+inline Vec3 cross_product(const Vec3& a, const Vec3& b)
 {
     return 
     {
@@ -90,15 +88,17 @@ Vec3 cross_product(const Vec3& a, const Vec3& b)
     };
 }
 
-Cyl cartesian_to_cylindrical_velocity(const Vec3& pos, const Vec3& vel)
+inline Cyl cart_to_cyl_vel(const Vec3& pos, const Vec3& vel)
 {
     double R = std::sqrt(pos.x * pos.x + pos.y * pos.y);
-    double phi = std::atan2(pos.y, pos.x);
+
+    if (R < 1e-12)
+    {
+        return {0.0, 0.0, vel.z};
+    }
 
     double v_R = (pos.x * vel.x + pos.y * vel.y) / R;
-    double v_phi = (pos.x * vel.y - pos.y * vel.x ) / (R * R);
+    double v_phi = (pos.x * vel.y - pos.y * vel.x ) / R;
 
     return {v_R, v_phi, vel.z}; 
 }
-
-#endif

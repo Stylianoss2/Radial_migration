@@ -1,0 +1,1 @@
+/usr/bin/c++  -O3 CMakeFiles/LogPotExec.dir/source/LogPot_3D.cpp.o -o ../bin/LogPotExec 

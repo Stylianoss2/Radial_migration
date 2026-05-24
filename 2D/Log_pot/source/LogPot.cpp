@@ -195,11 +195,11 @@ void scan_Lagrange_points(double xmin, double xmax, double ymin, double ymax, do
 
 double perturbation_scaling_factor(double sim_time)
 {
-    //Variables for perturbation profile
+    //Variables for perturbation profiless
     double t_start  = 2000.0;
-    double dur_up   = 200.0;
-    double dur_hold = 600.0;
-    double dur_down = 200.0;
+    double dur_up   = 500.0;
+    double dur_hold = 0.0;
+    double dur_down = 500.0;
     double t_up_end   = t_start + dur_up;
     double t_hold_end = t_up_end + dur_hold;
     double t_down_end = t_hold_end + dur_down;
