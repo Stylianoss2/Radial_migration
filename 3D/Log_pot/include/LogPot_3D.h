@@ -46,8 +46,12 @@ Vec3 total_acceleration_3D(const Vec3& pos, double sim_time, bool use_pert);
 double kinetic_energy(const Vec3& vel);
 double total_energy(const Vec3& pos, const Vec3& vel);
 double total_energy_3D(const Vec3& pos, const Vec3& vel, double sim_time, bool use_pert);
-
 double jacobi_integral_3D(const Vec3& pos, const Vec3& vel, double sim_time, bool use_pert);
+double random_energy(const Vec3& pos, const Vec3& vel);
+double radial_random_energy(const Vec3& pos, const Vec3& vel);
+double vertical_energy(const Vec3& pos, const Vec3& vel);
+double radial_action(const Vec3& pos, const Vec3& vel);
+double vertical_action(const Vec3& pos, const Vec3& vel);
 
 // Angular momentum
 Vec3 angular_momentum(const Vec3& pos, const Vec3& vel);
