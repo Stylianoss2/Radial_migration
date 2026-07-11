@@ -9,3 +9,13 @@ LogPotExec
 InitialConditionsExec
 
 
+
+*.dat
+*.png
+build/
+*/build/
+*.o
+*.o.d
+*.exe
+LogPotExec
+InitialConditionsExec
