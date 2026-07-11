@@ -1,0 +1,11 @@
+build/
+*/build/
+*.o
+*.o.d
+*.dat
+*.png
+*.exe
+LogPotExec
+InitialConditionsExec
+
+
